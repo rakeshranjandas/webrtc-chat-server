@@ -35,9 +35,23 @@ class OnlineClients
 
     public function getClientConnection($client)
     {
-        if (!$this->isClientOnline($client))
-            throw new Exception("Client is not online.");
+        if (!$this->isClientOnline($client)) return new NullConnection($client);
 
         return $this->onlineClientsMap[$client];
+    }
+};
+
+class NullConnection
+{
+    private $client;
+
+    public function __construct($client)
+    {
+        $this->client = $client;
+    }
+
+    public function send($message)
+    {
+        echo "Client {$this->client} is not online anymore. Sending to void. Message: {$message}\n";
     }
 }

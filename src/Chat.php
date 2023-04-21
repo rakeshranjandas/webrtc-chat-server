@@ -30,8 +30,6 @@ class Chat implements MessageComponentInterface
         //     }
         // }
 
-        echo "Message: $msg";
-
         $data = json_decode($msg);
         $this->resolver->resolve($conn, $data);
     }

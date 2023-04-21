@@ -18,66 +18,105 @@ class Resolver
 
     private function _addToConnClientMap($conn, $client)
     {
-        $this->connClientMap[$conn] = $client;
+        $this->connClientMap->offsetSet($conn, $client);
     }
 
     private function _getClientFromConn($conn)
     {
         if (!$this->connClientMap->offsetExists($conn))
-            throw new Exception("Conn does not exist");
+            return 0;
 
         return $this->connClientMap->offsetGet($conn);
     }
 
+    private function _isValidConnection($conn, $data)
+    {
+
+        if ($data->type !== "REGISTER" && $this->_getClientFromConn($conn) === 0) {
+            echo "Invalid conn\n";
+            return FALSE;
+        }
+
+        return TRUE;
+    }
+
     public function closeConnection($conn)
     {
+        $this->connClientMap->offsetUnset($conn);
         $this->onlineClients->makeClientOfflineWithConnection($conn);
     }
 
     public function resolve($conn, $data)
     {
+
+        if (!$this->_isValidConnection($conn, $data))
+            return;
+
+        $client = $this->_getClientFromConn($conn);
+
+        echo "{$client} sends message: " . json_encode($data) . "\n";
+
         switch ($data->type) {
             case "REGISTER":
                 $this->_onClientRegister($conn, $data);
-                $this->_addToConnClientMap($conn, $data->from);
                 break;
 
             case "FROM_SENDER_SENDER_REQUESTING":
-                $this->_onFromSenderSenderRequesting($this->_getClientFromConn($conn), $data);
+                $this->_onFromSenderSenderRequesting($client, $data);
                 break;
 
             case "FROM_RECEIVER_RECEIVER_READY":
-                $this->_onFromReceiverReceiverReady($this->_getClientFromConn($conn), $data);
+                $this->_onFromReceiverReceiverReady($client, $data);
                 break;
 
 
             case "FROM_SENDER_SENDER_SDP":
-                $this->_onFromSenderSenderSDP($this->_getClientFromConn($conn), $data);
+                $this->_onFromSenderSenderSDP($client, $data);
                 break;
 
             case "FROM_RECEIVER_RECEIVER_SDP":
-                $this->_onFromReceiverReceiverSDP($this->_getClientFromConn($conn), $data);
+                $this->_onFromReceiverReceiverSDP($client, $data);
                 break;
 
             case "FROM_SENDER_SENT":
-                $this->_onSenderSent($this->_getClientFromConn($conn), $data);
+                $this->_onSenderSent($client, $data);
                 break;
         }
     }
 
     private function _onClientRegister($conn, $data)
     {
+        // Make client online
+        // Check if any send requests are present for this client,
+        //   if yes send "FOR_RECEIVER_SENDER_REQUESTING" to this client
+
+        $this->_addToConnClientMap($conn, $data->from);
+
         $this->connClientMap[$conn] = $data->from;
         $this->onlineClients->makeClientOnline($data->from, $conn);
 
-        //
+        if (count($this->sendRequests->getRequestingClients($data->from))) {
+
+            $conn->send(json_encode([
+                "type" => "FOR_RECEIVER_SENDER_REQUESTING"
+            ]));
+        }
     }
 
     private function _onFromSenderSenderRequesting($client, $data)
     {
+        // Add request
+        // If receiver is online, send "FOR_RECEIVER_SENDER_REQUESTING"
+
         $this->sendRequests->addRequest($client, $data->to);
 
-        //
+        if ($this->onlineClients->isClientOnline($data->to)) {
+
+            $this->onlineClients->getClientConnection($data->to)
+                ->send(json_encode([
+                    "type" => "FOR_RECEIVER_SENDER_REQUESTING"
+                ]));
+        }
     }
 
     private function _onFromReceiverReceiverReady($client, $data)
@@ -101,7 +140,7 @@ class Resolver
 
     private function _onFromSenderSenderSDP($client, $data)
     {
-        $this->onlineClients->getClientConnection($client)
+        $this->onlineClients->getClientConnection($data->to)
             ->send(json_encode([
                 "type" => "FOR_RECEIVER_SENDER_SDP",
                 "from" => $client,

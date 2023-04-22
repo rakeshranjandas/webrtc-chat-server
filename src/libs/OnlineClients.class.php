@@ -2,20 +2,24 @@
 class OnlineClients
 {
     private $onlineClientsMap;
+    private $connClientMap;
 
     public function __construct()
     {
         $this->onlineClientsMap = [];
+        $this->connClientMap = new SplObjectStorage();
     }
 
     public function makeClientOnline($client, $conn)
     {
         $this->onlineClientsMap[$client] = $conn;
+        $this->connClientMap->offsetSet($conn, $client);
     }
 
     public function makeClientOffline($client)
     {
         unset($this->onlineClientsMap[$client]);
+        $this->connClientMap->offsetUnset($this->getClientConnection($client));
     }
 
     public function makeClientOfflineWithConnection($conn)
@@ -38,6 +42,14 @@ class OnlineClients
         if (!$this->isClientOnline($client)) return new NullConnection($client);
 
         return $this->onlineClientsMap[$client];
+    }
+
+    public function getClientFromConnection($conn)
+    {
+        if (!$this->connClientMap->offsetExists($conn))
+            return 0;
+
+        return $this->connClientMap->offsetGet($conn);
     }
 };
 

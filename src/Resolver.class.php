@@ -7,32 +7,17 @@ class Resolver
 
     private $onlineClients;
     private $sendRequests;
-    private $connClientMap;
 
     public function __construct()
     {
         $this->onlineClients = new OnlineClients();
         $this->sendRequests = new SendRequests();
-        $this->connClientMap = new SplObjectStorage();
-    }
-
-    private function _addToConnClientMap($conn, $client)
-    {
-        $this->connClientMap->offsetSet($conn, $client);
-    }
-
-    private function _getClientFromConn($conn)
-    {
-        if (!$this->connClientMap->offsetExists($conn))
-            return 0;
-
-        return $this->connClientMap->offsetGet($conn);
     }
 
     private function _isValidConnection($conn, $data)
     {
 
-        if ($data->type !== "REGISTER" && $this->_getClientFromConn($conn) === 0) {
+        if ($data->type !== "REGISTER" && $this->onlineClients->getClientFromConnection($conn) === 0) {
             echo "Invalid conn\n";
             return FALSE;
         }
@@ -42,7 +27,6 @@ class Resolver
 
     public function closeConnection($conn)
     {
-        $this->connClientMap->offsetUnset($conn);
         $this->onlineClients->makeClientOfflineWithConnection($conn);
     }
 
@@ -52,7 +36,7 @@ class Resolver
         if (!$this->_isValidConnection($conn, $data))
             return;
 
-        $client = $this->_getClientFromConn($conn);
+        $client = $this->onlineClients->getClientFromConnection($conn);
 
         echo "{$client} sends message: " . json_encode($data) . "\n";
 
@@ -90,9 +74,6 @@ class Resolver
         // Check if any send requests are present for this client,
         //   if yes send "FOR_RECEIVER_SENDER_REQUESTING" to this client
 
-        $this->_addToConnClientMap($conn, $data->from);
-
-        $this->connClientMap[$conn] = $data->from;
         $this->onlineClients->makeClientOnline($data->from, $conn);
 
         if (count($this->sendRequests->getRequestingClients($data->from))) {
